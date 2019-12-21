@@ -317,10 +317,18 @@ class AlertArtifact(JSONSerializable):
         else:
             self.data = attributes.get('data', None)
 
-    def _prepare_file_data(self, file_path):
-        with open(file_path, "rb") as file_artifact:
-            filename = os.path.basename(file_path)
-            mime = magic.Magic(mime=True).from_file(file_path)
-            encoded_string = base64.b64encode(file_artifact.read())
-
+    def _prepare_file_data(self, file_info):
+        if isinstance(file_info, tuple):
+            # caller opened file object; caller will close it
+            file_object, filename = file_info
+            mime = magic.Magic(mime=True).from_buffer(file_object.read())
+            file_object.seek(0)
+            encoded_string = base64.b64encode(file_object.read())
+        else:
+            file_path = file_info
+            # we open and close our own file
+            with open(file_path, "rb") as file_artifact:
+                filename = os.path.basename(file_path)
+                mime = magic.Magic(mime=True).from_file(file_path)
+                encoded_string = base64.b64encode(file_artifact.read())
         return "{};{};{}".format(filename, mime, encoded_string.decode())
