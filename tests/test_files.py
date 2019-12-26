@@ -3,10 +3,11 @@ try:
     import mock
 except ImportError:
     import unittest.mock as mock
-
+import uuid
 import thehive4py.models
+import magic
 from thehive4py.api import TheHiveApi
-from thehive4py.models import CaseObservable
+from thehive4py.models import CaseObservable, Alert, AlertArtifact
 from io import StringIO
 
 @mock.patch('thehive4py.api.requests.post')
@@ -50,4 +51,30 @@ def test_file_observable_file_object(mock_post):
         assert our_file.close.call_count == 0
     assert mock_post.call_count == 1
 
-
+@mock.patch('thehive4py.api.requests.post')
+def test_alert_artifact_named_file(mock_post):
+    thehive = TheHiveApi('http://127.0.0.1:9000', 'API_KEY')
+    data_inside = b'some content'
+    with mock.patch('thehive4py.models.open', mock.mock_open(read_data=data_inside)), \
+          mock.patch('magic.open', mock.mock_open(read_data=data_inside)):
+        artifacts = [
+            AlertArtifact(dataType='file', data='pic.png'),
+        ]
+        sourceRef = str(uuid.uuid4())[0:6]
+        alert = Alert(title='New Alert',
+                      tlp=3,
+                      tags=['TheHive4Py', 'sample'],
+                      description='N/A',
+                      type='external',
+                      source='instance1',
+                      sourceRef=sourceRef,
+                      artifacts=artifacts)
+        response = thehive.create_alert(alert)
+        # if we just pass in the filename, the file has to be opened ...
+        assert thehive4py.models.open.call_count > 0
+        # ... but it can't be closed in this scope - this is the
+        # problem of #10, but for alert artifacts rather than case
+        # observables.
+        #
+        # assert thehive4py.models.open.return_value.close.call_count == thehive4py.models.open.call_count
+    assert mock_post.call_count == 1
